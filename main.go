@@ -6,6 +6,8 @@ import (
 	"github.com/gofiber/websocket/v2"
 	"github.com/joho/godotenv"
 	"load-testing-proxy-server/internal/client/firebase_client"
+	"load-testing-proxy-server/internal/client/grpc_client"
+	"load-testing-proxy-server/internal/client/ws_client"
 	"log"
 	"os"
 )
@@ -28,6 +30,8 @@ func main() {
 	})
 
 	app.Get("/firebase-client", websocket.New(firebase_client.HandleConnection))
+	app.Get("/grpc-client", websocket.New(grpc_client.GRPCClient))
+	app.Get("/ws-client", websocket.New(ws_client.WSClient))
 
 	go firebase_client.HandleMessages()
 	go firebase_client.LocationListener(ctx)

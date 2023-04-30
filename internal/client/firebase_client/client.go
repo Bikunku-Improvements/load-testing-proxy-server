@@ -23,7 +23,7 @@ func HandleMessages() {
 	for {
 		// grab any next message from channel
 		msg := <-LocationBroadcaster
-		log.Printf("message received with latency: %s", time.Now().Sub(msg.Timestamp))
+
 		if v, ok := ActiveBus[msg.BusID]; ok {
 			messageClients(BusLocationResponse{
 				Number:    v.Number,
@@ -35,6 +35,7 @@ func HandleMessages() {
 				Latitude:  msg.Latitude,
 				Longitude: msg.Longitude,
 				Speed:     msg.Speed,
+				Timestamp: msg.Timestamp,
 			})
 		}
 	}
@@ -48,6 +49,7 @@ func messageClients(msg BusLocationResponse) {
 }
 
 func messageClient(client *websocket.Conn, msg BusLocationResponse) {
+	log.Printf("message received from firebase with latency: %s", time.Now().Sub(msg.Timestamp))
 	err := client.WriteJSON(msg)
 	if err != nil {
 		log.Printf("error: %v", err)
