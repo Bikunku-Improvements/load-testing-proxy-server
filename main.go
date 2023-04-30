@@ -1,17 +1,25 @@
 package main
 
 import (
+	"context"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/websocket/v2"
+	"github.com/joho/godotenv"
+	"load-testing-proxy-server/internal/client/firebase_client"
 	"log"
+	"os"
 )
 
 func main() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Printf("error loading .env file: %v", err)
+	}
+
+	ctx := context.Background()
 	app := fiber.New()
 
 	app.Use("/ws", func(c *fiber.Ctx) error {
-		// IsWebSocketUpgrade returns true if the client
-		// requested upgrade to the WebSocket protocol.
 		if websocket.IsWebSocketUpgrade(c) {
 			c.Locals("allowed", true)
 			return c.Next()
@@ -19,8 +27,11 @@ func main() {
 		return fiber.ErrUpgradeRequired
 	})
 
-	app.Get("/firebase-client", websocket.New(FirebaseClient))
-	app.Get("/grpc-client", websocket.New(FirebaseClient))
+	app.Get("/firebase-client", websocket.New(firebase_client.HandleConnection))
 
-	log.Fatal(app.Listen(":3000"))
+	go firebase_client.HandleMessages()
+	go firebase_client.LocationListener(ctx)
+	go firebase_client.BusListener(ctx)
+
+	log.Fatal(app.Listen(":" + os.Getenv("PORT")))
 }
