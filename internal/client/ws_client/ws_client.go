@@ -11,8 +11,10 @@ import (
 )
 
 func WSClient(c *websocket.Conn) {
+	newestLocation := make(map[int]int)
+
 	addr := os.Getenv("LEGACY_BIKUNKU_SERVER")
-	dial, resp, err := websocket_dialler.DefaultDialer.Dial(fmt.Sprintf("wss://%s/bus/stream", addr), nil)
+	dial, resp, err := websocket_dialler.DefaultDialer.Dial(fmt.Sprintf("ws://%s/bus/stream", addr), nil)
 	if err != nil {
 		log.Fatalln(resp, err)
 	}
@@ -33,14 +35,16 @@ func WSClient(c *websocket.Conn) {
 		}
 
 		for _, v := range location {
-			if v.IsNewLocation {
-				log.Printf("message received from websocket legacy with latency: %s", time.Now().Sub(v.Timestamp))
+			if _, ok := newestLocation[v.Id]; !ok {
+				log.Printf("message received from websocket legacy with id=%d with latency: %s", v.Id, time.Now().Sub(v.Timestamp))
+				newestLocation[v.Id] = v.Id
 			}
 		}
 
 		err = c.WriteJSON(location)
 		if err != nil {
 			log.Println("failed to write: ", err)
+			return
 		}
 	}
 
