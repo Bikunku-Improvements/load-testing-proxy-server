@@ -14,7 +14,7 @@ func WSClient(c *websocket.Conn) {
 	newestLocation := make(map[int]int)
 
 	addr := os.Getenv("LEGACY_BIKUNKU_SERVER")
-	dial, resp, err := websocket_dialler.DefaultDialer.Dial(fmt.Sprintf("ws://%s/bus/stream", addr), nil)
+	dial, resp, err := websocket_dialler.DefaultDialer.Dial(fmt.Sprintf("wss://%s/bus/stream", addr), nil)
 	if err != nil {
 		log.Fatalln(resp, err)
 	}
