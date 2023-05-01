@@ -14,24 +14,25 @@ func WSClient(c *websocket.Conn) {
 	newestLocation := make(map[int]int)
 
 	addr := os.Getenv("LEGACY_BIKUNKU_SERVER")
-	dial, resp, err := websocket_dialler.DefaultDialer.Dial(fmt.Sprintf("wss://%s/bus/stream", addr), nil)
+	dial, resp, err := websocket_dialler.DefaultDialer.Dial(fmt.Sprintf("ws://%s/bus/stream", addr), nil)
 	if err != nil {
 		log.Fatalln(resp, err)
 	}
 	defer dial.Close()
+	defer c.Close()
 
 	for {
 		_, msg, err := dial.ReadMessage()
 		if err != nil {
 			log.Println("connection closed: ", err)
-			return
+			break
 		}
 
 		var location []BusLocationResponse
 		err = json.Unmarshal(msg, &location)
 		if err != nil {
 			log.Println("failed to unmarshall data: ", err)
-			return
+			break
 		}
 
 		for _, v := range location {
@@ -44,7 +45,7 @@ func WSClient(c *websocket.Conn) {
 		err = c.WriteJSON(location)
 		if err != nil {
 			log.Println("failed to write: ", err)
-			return
+			break
 		}
 	}
 
