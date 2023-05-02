@@ -10,9 +10,15 @@ import (
 	"google.golang.org/api/option"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"load-testing-proxy-server/entity"
 	"log"
 	"os"
 	"strconv"
+)
+
+var (
+	LocationBroadcaster = make(chan entity.BusLocationFirebase)
+	ActiveBus           = make(map[int]entity.Bus)
 )
 
 func BusListener(ctx context.Context) {
@@ -48,7 +54,7 @@ func BusListener(ctx context.Context) {
 					fmt.Printf("Documents.Next: %v", err)
 				}
 
-				var data Bus
+				var data entity.Bus
 				b, err := json.Marshal(doc.Data())
 				if err != nil {
 					log.Printf("error: %v", err)
@@ -106,8 +112,8 @@ func LocationListener(ctx context.Context) {
 				if err != nil {
 					fmt.Printf("Documents.Next: %v", err)
 				}
-				
-				var msg BusLocation
+
+				var msg entity.BusLocationFirebase
 				b, err := json.Marshal(doc.Data())
 				if err != nil {
 					log.Printf("error: %v", err)

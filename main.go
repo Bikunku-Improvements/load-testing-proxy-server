@@ -1,15 +1,11 @@
 package main
 
 import (
-	"context"
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/websocket/v2"
 	"github.com/joho/godotenv"
-	"load-testing-proxy-server/internal/client/firebase_client"
-	"load-testing-proxy-server/internal/client/grpc_client"
-	"load-testing-proxy-server/internal/client/ws_client"
+	"load-testing-proxy-server/load_test"
 	"log"
 	"os"
+	"strconv"
 )
 
 func main() {
@@ -18,24 +14,35 @@ func main() {
 		log.Printf("error loading .env file: %v", err)
 	}
 
-	ctx := context.Background()
-	app := fiber.New()
+	args := os.Args[1:]
+	if len(args) == 1 && args[0] == "help" {
+		log.Println("Usage go run main.go [type] [concurrent user] [receive message per client]")
+		log.Println("type options grpc, ws-legacy, firebase")
+	}
 
-	app.Use("/ws", func(c *fiber.Ctx) error {
-		if websocket.IsWebSocketUpgrade(c) {
-			c.Locals("allowed", true)
-			return c.Next()
-		}
-		return fiber.ErrUpgradeRequired
-	})
+	if len(args) < 3 {
+		log.Fatalf("arguments need to be 'type concurentUser receiveMessagePerClient'")
+	}
 
-	app.Get("/firebase-client", websocket.New(firebase_client.HandleConnection))
-	app.Get("/grpc-client", websocket.New(grpc_client.GRPCClient))
-	app.Get("/ws-client", websocket.New(ws_client.WSClient))
+	testType := args[0]
+	concurrentUser, err := strconv.Atoi(args[1])
+	if err != nil {
+		log.Fatalf("concurrent user needs to be integer")
+	}
 
-	go firebase_client.HandleMessages()
-	go firebase_client.LocationListener(ctx)
-	go firebase_client.BusListener(ctx)
+	receiveMessagePerClient, err := strconv.Atoi(args[2])
+	if err != nil {
+		log.Fatalf("receive message per client needs to be integer")
+	}
 
-	log.Fatal(app.Listen(":" + os.Getenv("PORT")))
+	switch testType {
+	case "grpc":
+		load_test.GRPCTest(concurrentUser, receiveMessagePerClient)
+	case "firebase":
+		load_test.FirebaseTest(concurrentUser, receiveMessagePerClient)
+	case "ws-legacy":
+		load_test.WSTest(concurrentUser, receiveMessagePerClient)
+	default:
+		log.Fatalf("type need to be grpc, firebase, or ws-legacy")
+	}
 }

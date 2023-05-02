@@ -1,4 +1,4 @@
-package firebase_client
+package entity
 
 import "time"
 
@@ -11,7 +11,7 @@ type Bus struct {
 	IsActive bool   `json:"is_active"`
 }
 
-type BusLocation struct {
+type BusLocationFirebase struct {
 	BusID     int       `json:"bus_id"`
 	Heading   int       `json:"heading"`
 	Latitude  float64   `json:"latitude"`
@@ -20,7 +20,7 @@ type BusLocation struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
-type BusLocationResponse struct {
+type BusLocationFirebaseResponse struct {
 	Number    int       `json:"number"`
 	Plate     string    `json:"plate"`
 	Status    string    `json:"status"`
@@ -32,6 +32,3 @@ type BusLocationResponse struct {
 	Speed     int       `json:"speed"`
 	Timestamp time.Time `json:"timestamp"`
 }
-
-var LocationBroadcaster = make(chan BusLocation)
-var ActiveBus = make(map[int]Bus)
