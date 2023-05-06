@@ -5,21 +5,30 @@ option go_package="./pb";
 service Location {
   rpc SubscribeLocation(SubscribeLocationRequest)  returns (stream SubscribeLocationResponse) {}
   rpc SendLocation(stream SendLocationRequest)  returns (SendLocationResponse) {}
+
 }
 
 message SubscribeLocationRequest {}
 
 message SubscribeLocationResponse {
-  string long = 1;
-  string lat = 2;
-  string created_at = 3;
-  string bus_id = 4;
+  uint64 bus_id = 1;
+  int64 number = 2;
+  string plate = 3;
+  string status = 4;
+  string route = 5;
+  bool is_active = 6;
+  float long = 7;
+  float lat = 8;
+  float speed = 9;
+  float heading = 10;
+  string created_at = 11;
 }
 
 message SendLocationRequest {
-  string long = 1;
-  string lat = 2;
-  string bus_id = 3;
+  float long = 1;
+  float lat = 2;
+  float speed = 3;
+  float heading = 4;
 }
 
 message SendLocationResponse {

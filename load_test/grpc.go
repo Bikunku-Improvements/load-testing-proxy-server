@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 	"io"
 	"load-testing-proxy-server/entity"
 	"load-testing-proxy-server/grpc/pb"
@@ -107,10 +108,16 @@ func GRPCDriverTest(concurrentUser, sendMessagePerClient int) {
 				return
 			}
 
+			md := metadata.New(map[string]string{
+				"token": os.Getenv("DRIVER_SERVICE_TOKEN"),
+			})
+			ctx = metadata.NewOutgoingContext(ctx, md)
+
 			data := pb.SendLocationRequest{
-				Long:  "1",
-				Lat:   "1",
-				BusId: "1",
+				Long:    1,
+				Lat:     1,
+				Speed:   0,
+				Heading: 0,
 			}
 
 			svc := pb.NewLocationClient(conn)
