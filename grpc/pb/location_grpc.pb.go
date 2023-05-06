@@ -20,6 +20,7 @@ const _ = grpc.SupportPackageIsVersion7
 
 const (
 	Location_SubscribeLocation_FullMethodName = "/proto.Location/SubscribeLocation"
+	Location_SendLocation_FullMethodName      = "/proto.Location/SendLocation"
 )
 
 // LocationClient is the client API for Location service.
@@ -27,6 +28,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type LocationClient interface {
 	SubscribeLocation(ctx context.Context, in *SubscribeLocationRequest, opts ...grpc.CallOption) (Location_SubscribeLocationClient, error)
+	SendLocation(ctx context.Context, opts ...grpc.CallOption) (Location_SendLocationClient, error)
 }
 
 type locationClient struct {
@@ -69,11 +71,46 @@ func (x *locationSubscribeLocationClient) Recv() (*SubscribeLocationResponse, er
 	return m, nil
 }
 
+func (c *locationClient) SendLocation(ctx context.Context, opts ...grpc.CallOption) (Location_SendLocationClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Location_ServiceDesc.Streams[1], Location_SendLocation_FullMethodName, opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &locationSendLocationClient{stream}
+	return x, nil
+}
+
+type Location_SendLocationClient interface {
+	Send(*SendLocationRequest) error
+	CloseAndRecv() (*SendLocationResponse, error)
+	grpc.ClientStream
+}
+
+type locationSendLocationClient struct {
+	grpc.ClientStream
+}
+
+func (x *locationSendLocationClient) Send(m *SendLocationRequest) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *locationSendLocationClient) CloseAndRecv() (*SendLocationResponse, error) {
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	m := new(SendLocationResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // LocationServer is the server API for Location service.
 // All implementations must embed UnimplementedLocationServer
 // for forward compatibility
 type LocationServer interface {
 	SubscribeLocation(*SubscribeLocationRequest, Location_SubscribeLocationServer) error
+	SendLocation(Location_SendLocationServer) error
 	mustEmbedUnimplementedLocationServer()
 }
 
@@ -83,6 +120,9 @@ type UnimplementedLocationServer struct {
 
 func (UnimplementedLocationServer) SubscribeLocation(*SubscribeLocationRequest, Location_SubscribeLocationServer) error {
 	return status.Errorf(codes.Unimplemented, "method SubscribeLocation not implemented")
+}
+func (UnimplementedLocationServer) SendLocation(Location_SendLocationServer) error {
+	return status.Errorf(codes.Unimplemented, "method SendLocation not implemented")
 }
 func (UnimplementedLocationServer) mustEmbedUnimplementedLocationServer() {}
 
@@ -118,6 +158,32 @@ func (x *locationSubscribeLocationServer) Send(m *SubscribeLocationResponse) err
 	return x.ServerStream.SendMsg(m)
 }
 
+func _Location_SendLocation_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(LocationServer).SendLocation(&locationSendLocationServer{stream})
+}
+
+type Location_SendLocationServer interface {
+	SendAndClose(*SendLocationResponse) error
+	Recv() (*SendLocationRequest, error)
+	grpc.ServerStream
+}
+
+type locationSendLocationServer struct {
+	grpc.ServerStream
+}
+
+func (x *locationSendLocationServer) SendAndClose(m *SendLocationResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *locationSendLocationServer) Recv() (*SendLocationRequest, error) {
+	m := new(SendLocationRequest)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // Location_ServiceDesc is the grpc.ServiceDesc for Location service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -130,6 +196,11 @@ var Location_ServiceDesc = grpc.ServiceDesc{
 			StreamName:    "SubscribeLocation",
 			Handler:       _Location_SubscribeLocation_Handler,
 			ServerStreams: true,
+		},
+		{
+			StreamName:    "SendLocation",
+			Handler:       _Location_SendLocation_Handler,
+			ClientStreams: true,
 		},
 	},
 	Metadata: "grpc/pb/location.proto",

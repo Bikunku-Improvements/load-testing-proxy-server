@@ -4,6 +4,7 @@ option go_package="./pb";
 
 service Location {
   rpc SubscribeLocation(SubscribeLocationRequest)  returns (stream SubscribeLocationResponse) {}
+  rpc SendLocation(stream SendLocationRequest)  returns (SendLocationResponse) {}
 }
 
 message SubscribeLocationRequest {}
@@ -13,4 +14,14 @@ message SubscribeLocationResponse {
   string lat = 2;
   string created_at = 3;
   string bus_id = 4;
+}
+
+message SendLocationRequest {
+  string long = 1;
+  string lat = 2;
+  string bus_id = 3;
+}
+
+message SendLocationResponse {
+  string message = 1;
 }

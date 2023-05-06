@@ -12,18 +12,17 @@ import (
 	"os"
 	"sync"
 	"time"
+	"unsafe"
 )
 
-func GRPCTest(concurrentUser int, receiveMessagePerClient int) {
+func GRPCClientTest(concurrentUser, receiveMessagePerClient int) {
 	log.Printf("starting grpc load test with %d concurrent user and %d receive message per client", concurrentUser, receiveMessagePerClient)
 
-	var wg sync.WaitGroup
-
-	avgTime := AverageTime{
+	avgTime := EndToEndResponseTime{
 		sync: sync.Mutex{},
 	}
 
-	log.Printf("adding client...")
+	var wg sync.WaitGroup
 	for i := 0; i < concurrentUser; i++ {
 		wg.Add(1)
 		go func() {
@@ -72,7 +71,6 @@ func GRPCTest(concurrentUser int, receiveMessagePerClient int) {
 
 				avgTime.sync.Lock()
 				avgTime.times = append(avgTime.times, responseTime.Seconds())
-				avgTime.count++
 				avgTime.sync.Unlock()
 
 				totalRequest++
@@ -83,4 +81,60 @@ func GRPCTest(concurrentUser int, receiveMessagePerClient int) {
 	wg.Wait()
 
 	log.Printf("median response time: %v second", median(avgTime.times))
+}
+
+func GRPCDriverTest(concurrentUser, sendMessagePerClient int) {
+	log.Printf("starting grpc driver load test with %d concurrent user and %d send message per client", concurrentUser, sendMessagePerClient)
+
+	throughput := Throughput{
+		sync: sync.Mutex{},
+	}
+
+	ctx := context.Background()
+
+	start := time.Now()
+	var wg sync.WaitGroup
+	for i := 0; i < concurrentUser; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			addr := os.Getenv("DRIVER_SERVICE_GRPC")
+
+			conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+			defer conn.Close()
+			if err != nil {
+				log.Printf("error connecting to grpc: %v", err)
+				return
+			}
+
+			data := pb.SendLocationRequest{
+				Long:  "1",
+				Lat:   "1",
+				BusId: "1",
+			}
+
+			svc := pb.NewLocationClient(conn)
+			stream, err := svc.SendLocation(ctx)
+			if err != nil {
+				log.Printf("error connecting to grpc: %v", err)
+				return
+			}
+			var totalRequest int
+			for totalRequest < sendMessagePerClient {
+				err = stream.Send(&data)
+				if err != nil {
+					log.Printf("error sending data to grpc: %v", err)
+					return
+				}
+
+				throughput.sync.Lock()
+				throughput.count++
+				throughput.size += int(unsafe.Sizeof(data))
+				throughput.sync.Unlock()
+				totalRequest++
+			}
+		}()
+	}
+	wg.Wait()
+	log.Printf("total size of sent data: %v kb/s", float64(throughput.size)/1000/time.Since(start).Seconds())
 }

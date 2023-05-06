@@ -16,3 +16,10 @@ type BusLocationWSLegacyResponse struct {
 	Timestamp     time.Time `json:"Timestamp"`
 	IsNewLocation bool      `json:"IsNewLocation"`
 }
+
+type SendLocationRequest struct {
+	Long    float64 `json:"long"`
+	Lat     float64 `json:"lat"`
+	Speed   float64 `json:"speed"`
+	Heading float64 `json:"heading"`
+}

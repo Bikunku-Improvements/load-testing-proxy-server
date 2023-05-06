@@ -5,9 +5,14 @@ import (
 	"sync"
 )
 
-type AverageTime struct {
-	count float64
+type EndToEndResponseTime struct {
 	times []float64
+	sync  sync.Mutex
+}
+
+type Throughput struct {
+	count int
+	size  int
 	sync  sync.Mutex
 }
 

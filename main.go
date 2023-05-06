@@ -16,33 +16,62 @@ func main() {
 
 	args := os.Args[1:]
 	if len(args) == 1 && args[0] == "help" {
-		log.Println("Usage go run main.go [type] [concurrent user] [receive message per client]")
-		log.Println("type options grpc, ws-legacy, firebase")
+		log.Println("Usage go run main.go [type] [endpoint_type] [concurrent user] [receive/send message per client]")
+		log.Println("type options are driver or client")
+		log.Println("endpoint type options are grpc, ws-legacy, firebase")
 	}
 
-	if len(args) < 3 {
-		log.Fatalf("arguments need to be 'type concurentUser receiveMessagePerClient'")
+	if len(args) < 4 {
+		log.Fatalf("arguments need to be '[type] [endpoint_type] [concurrent user] [receive/send message per client]'")
 	}
 
-	testType := args[0]
-	concurrentUser, err := strconv.Atoi(args[1])
-	if err != nil {
-		log.Fatalf("concurrent user needs to be integer")
-	}
+	clientType := args[0]
+	switch clientType {
+	case "driver":
+		endpointType := args[1]
+		concurrentUser, err := strconv.Atoi(args[2])
+		if err != nil {
+			log.Fatalf("concurrent user needs to be integer")
+		}
 
-	receiveMessagePerClient, err := strconv.Atoi(args[2])
-	if err != nil {
-		log.Fatalf("receive message per client needs to be integer")
-	}
+		sendMessagePerClient, err := strconv.Atoi(args[3])
+		if err != nil {
+			log.Fatalf("send message per client needs to be integer")
+		}
 
-	switch testType {
-	case "grpc":
-		load_test.GRPCTest(concurrentUser, receiveMessagePerClient)
-	case "firebase":
-		load_test.FirebaseTest(concurrentUser, receiveMessagePerClient)
-	case "ws-legacy":
-		load_test.WSTest(concurrentUser, receiveMessagePerClient)
+		switch endpointType {
+		case "grpc":
+			load_test.GRPCDriverTest(concurrentUser, sendMessagePerClient)
+		case "firebase":
+			load_test.FirebaseDriverTest(concurrentUser, sendMessagePerClient)
+		case "ws-legacy":
+			load_test.WSLegacyDriverTest(concurrentUser, sendMessagePerClient)
+		default:
+			log.Fatalf("type should be grpc, firebase, or ws-legacy")
+		}
+	case "client":
+		endpointType := args[1]
+		concurrentUser, err := strconv.Atoi(args[2])
+		if err != nil {
+			log.Fatalf("concurrent user needs to be integer")
+		}
+
+		receiveMessagePerClient, err := strconv.Atoi(args[3])
+		if err != nil {
+			log.Fatalf("receive message per client needs to be integer")
+		}
+
+		switch endpointType {
+		case "grpc":
+			load_test.GRPCClientTest(concurrentUser, receiveMessagePerClient)
+		case "firebase":
+			load_test.FirebaseClientTest(concurrentUser, receiveMessagePerClient)
+		case "ws-legacy":
+			load_test.WSLegacyClientTest(concurrentUser, receiveMessagePerClient)
+		default:
+			log.Fatalf("type need to be grpc, firebase, or ws-legacy")
+		}
 	default:
-		log.Fatalf("type need to be grpc, firebase, or ws-legacy")
+		log.Fatalf("type must be client or driver")
 	}
 }
