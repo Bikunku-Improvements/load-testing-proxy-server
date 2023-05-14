@@ -6,14 +6,31 @@ import (
 )
 
 type EndToEndResponseTime struct {
-	times []float64
-	sync  sync.Mutex
+	times  []float64
+	sync   sync.Mutex
+	newLoc map[int]int
 }
 
 type Throughput struct {
 	count int
 	size  int
 	sync  sync.Mutex
+}
+
+type ErrorOccur struct {
+	errors map[string]int
+	sync   sync.Mutex
+}
+
+func (e *ErrorOccur) HandleError(err error) {
+	e.sync.Lock()
+	defer e.sync.Unlock()
+
+	if _, ok := e.errors[err.Error()]; ok {
+		e.errors[err.Error()] += 1
+	} else {
+		e.errors[err.Error()] = 1
+	}
 }
 
 func median(data []float64) float64 {

@@ -18,12 +18,17 @@ import (
 
 func GRPCClientTest(concurrentUser, receiveMessagePerClient int) {
 	log.Printf("starting grpc load test with %d concurrent user and %d receive message per client", concurrentUser, receiveMessagePerClient)
+	var wg sync.WaitGroup
 
 	avgTime := EndToEndResponseTime{
 		sync: sync.Mutex{},
 	}
 
-	var wg sync.WaitGroup
+	errorsOccur := ErrorOccur{
+		errors: make(map[string]int),
+		sync:   sync.Mutex{},
+	}
+
 	for i := 0; i < concurrentUser; i++ {
 		wg.Add(1)
 		go func() {
@@ -33,14 +38,14 @@ func GRPCClientTest(concurrentUser, receiveMessagePerClient int) {
 			conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 			defer conn.Close()
 			if err != nil {
-				log.Printf("error connecting to grpc: %v", err)
+				errorsOccur.HandleError(err)
 				return
 			}
 
 			client := pb.NewLocationClient(conn)
 			stream, err := client.SubscribeLocation(context.Background(), &pb.SubscribeLocationRequest{})
 			if err != nil {
-				log.Printf("error connecting to grpc: %v", err)
+				errorsOccur.HandleError(err)
 				return
 			}
 
@@ -51,20 +56,23 @@ func GRPCClientTest(concurrentUser, receiveMessagePerClient int) {
 				if err == io.EOF {
 					break
 				}
+
 				if err != nil {
-					log.Printf("%v.SubscribeLocation(_) = _, %v", client, err)
+					errorsOccur.HandleError(err)
 					return
 				}
 
 				b, err := json.Marshal(location)
 				if err != nil {
-					log.Printf("failed to unmarshall: %v", err)
+					errorsOccur.HandleError(err)
+					return
 				}
 
 				var loc entity.BusLocationGRPC
 				err = json.Unmarshal(b, &loc)
 				if err != nil {
-					log.Printf("failed to unmarshall: %v", err)
+					errorsOccur.HandleError(err)
+					return
 				}
 
 				responseTime := time.Since(loc.CreatedAt)
@@ -82,8 +90,10 @@ func GRPCClientTest(concurrentUser, receiveMessagePerClient int) {
 	wg.Wait()
 
 	log.Printf("median response time: %v second", median(avgTime.times))
+	log.Printf("error occured: %v", errorsOccur.errors)
 }
 
+// Deprecated: please use GRPCDriverTest in integration package
 func GRPCDriverTest(concurrentUser, sendMessagePerClient int) {
 	log.Printf("starting grpc driver load test with %d concurrent user and %d send message per client", concurrentUser, sendMessagePerClient)
 
@@ -113,13 +123,6 @@ func GRPCDriverTest(concurrentUser, sendMessagePerClient int) {
 			})
 			ctx = metadata.NewOutgoingContext(ctx, md)
 
-			data := pb.SendLocationRequest{
-				Long:    1,
-				Lat:     1,
-				Speed:   0,
-				Heading: 0,
-			}
-
 			svc := pb.NewLocationClient(conn)
 			stream, err := svc.SendLocation(ctx)
 			if err != nil {
@@ -128,7 +131,16 @@ func GRPCDriverTest(concurrentUser, sendMessagePerClient int) {
 			}
 			var totalRequest int
 			for totalRequest < sendMessagePerClient {
-				err = stream.Send(&data)
+				data := []byte(`{"long": 91, "lat": 20, "speed": 0.00, "heading": 0}`)
+
+				var dataMarshalled pb.SendLocationRequest
+				err = json.Unmarshal(data, &dataMarshalled)
+				if err != nil {
+					log.Printf("error when marhsal input data: %v", err)
+					return
+				}
+
+				err = stream.Send(&dataMarshalled)
 				if err != nil {
 					log.Printf("error sending data to grpc: %v", err)
 					return

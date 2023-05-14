@@ -17,19 +17,24 @@ func WSLegacyClientTest(concurrentUser int, receiveMessagePerClient int) {
 	var wg sync.WaitGroup
 
 	avgTime := EndToEndResponseTime{
-		sync: sync.Mutex{},
+		sync:   sync.Mutex{},
+		newLoc: make(map[int]int),
+	}
+
+	errorsOccur := ErrorOccur{
+		errors: make(map[string]int),
+		sync:   sync.Mutex{},
 	}
 
 	for i := 0; i < concurrentUser; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			newestLocation := make(map[int]int)
 
 			addr := os.Getenv("LEGACY_BIKUNKU_SERVER")
-			dial, resp, err := websocket_dialler.DefaultDialer.Dial(fmt.Sprintf("ws://%s/bus/stream", addr), nil)
+			dial, _, err := websocket_dialler.DefaultDialer.Dial(fmt.Sprintf("ws://%s/bus/stream", addr), nil)
 			if err != nil {
-				log.Println(resp, err)
+				errorsOccur.HandleError(err)
 				return
 			}
 			defer dial.Close()
@@ -38,39 +43,40 @@ func WSLegacyClientTest(concurrentUser int, receiveMessagePerClient int) {
 			for totalRequest < receiveMessagePerClient {
 				_, msg, err := dial.ReadMessage()
 				if err != nil {
-					log.Println("connection closed: ", err)
-					break
+					errorsOccur.HandleError(err)
+					return
 				}
 
 				var location []entity.BusLocationWSLegacyResponse
 				err = json.Unmarshal(msg, &location)
 				if err != nil {
-					log.Println("failed to unmarshall data: ", err)
-					break
+					errorsOccur.HandleError(err)
+					return
 				}
 
 				for _, v := range location {
-					if _, ok := newestLocation[v.Id]; !ok {
+					avgTime.sync.Lock()
+					if _, ok := avgTime.newLoc[v.Id]; !ok {
 						responseTime := time.Since(v.Timestamp)
-						log.Printf("message received from websocket legacy with id=%d with latency: %s", v.Id, responseTime)
-						newestLocation[v.Id] = v.Id
-
-						avgTime.sync.Lock()
+						avgTime.newLoc[v.Id] = v.Id
 						avgTime.times = append(avgTime.times, responseTime.Seconds())
-						avgTime.sync.Unlock()
 
 						totalRequest++
+
+						log.Printf("message received from websocket legacy with id=%d with latency: %s", v.Id, responseTime)
 					}
+					avgTime.sync.Unlock()
 				}
 			}
-
 		}()
 	}
 	wg.Wait()
 
 	log.Printf("median response time: %v second", median(avgTime.times))
+	log.Printf("error occured: %v", errorsOccur.errors)
 }
 
+// Deprecated: please use WSLegacyDriverTest in integration package
 func WSLegacyDriverTest(concurrentUser, sendMessagePerClient int) {
 	log.Printf("starting ws legacy driver load test with %d concurrent user  and %d send message per client", concurrentUser, sendMessagePerClient)
 
@@ -95,15 +101,10 @@ func WSLegacyDriverTest(concurrentUser, sendMessagePerClient int) {
 			}
 			defer dial.Close()
 
-			data := entity.SendLocationRequest{
-				Long:    1,
-				Lat:     1,
-				Speed:   0,
-				Heading: 0,
-			}
 			var totalRequest int
 			for totalRequest < sendMessagePerClient {
-				err = dial.WriteJSON(data)
+				data := []byte(`{"long": 91, "lat": 20, "speed": 0.00, "heading": 0}`)
+				err = dial.WriteMessage(1, data)
 				if err != nil {
 					log.Println(err)
 					return

@@ -27,34 +27,40 @@ type LoginResp struct {
 	} `json:"data"`
 }
 
-func SendRouteWSLegacy(ctx context.Context, wg *sync.WaitGroup, token string, route []byte) {
-	defer wg.Done()
+var (
+	errorOccur = ErrorOccur{
+		errors: make(map[string]int),
+		sync:   sync.Mutex{},
+	}
+)
+
+func SendRouteWSLegacy(ctx context.Context, token string, route []byte) {
 	addr := os.Getenv("LEGACY_BIKUNKU_SERVER")
 
 	url := fmt.Sprintf("ws://%s/bus/stream?type=%s&token=%s", addr, "driver", token)
-	dial, resp, err := websocket_dialler.DefaultDialer.Dial(url, nil)
+	dial, _, err := websocket_dialler.DefaultDialer.Dial(url, nil)
 	if err != nil {
-		log.Println(resp, err)
+		errorOccur.HandleError(err)
 		return
 	}
 	defer dial.Close()
 
 	var routeReq []RouteData
 	if err := json.Unmarshal(route, &routeReq); err != nil {
-		log.Printf("error when unmarshal data: %v\n", err)
+		errorOccur.HandleError(err)
 		return
 	}
 
 	for _, v := range routeReq {
 		b, err := json.Marshal(v)
 		if err != nil {
-			log.Printf("error when marshal: %v", err)
+			errorOccur.HandleError(err)
 			return
 		}
 
 		err = dial.WriteMessage(1, b)
 		if err != nil {
-			log.Println(err)
+			errorOccur.HandleError(err)
 			return
 		}
 
@@ -101,14 +107,18 @@ func WSLegacyDriverTest() {
 
 	wg.Add(1)
 	go func() {
+		defer wg.Done()
+
 		for _, v := range RedCredential {
+			wg.Add(1)
 			go func() {
+				defer wg.Done()
 				token, err := LoginDriverWSLegacy(ctx, v.Username, v.Password)
 				if err != nil {
-					log.Printf("unable to log in: %v", err)
+					errorOccur.HandleError(err)
 					return
 				}
-				SendRouteWSLegacy(ctx, &wg, token, Red)
+				SendRouteWSLegacy(ctx, token, Red)
 			}()
 			time.Sleep(5 * time.Second)
 		}
@@ -118,17 +128,25 @@ func WSLegacyDriverTest() {
 
 	wg.Add(1)
 	go func() {
+		defer wg.Done()
+
 		for _, v := range BlueCredential {
+			wg.Add(1)
 			go func() {
+				defer wg.Done()
 				token, err := LoginDriverWSLegacy(ctx, v.Username, v.Password)
 				if err != nil {
-					log.Printf("unable to log in: %v", err)
+					log.Printf("failed login %s", v.Username)
+					errorOccur.HandleError(err)
 					return
 				}
-				SendRouteWSLegacy(ctx, &wg, token, Blue)
+				log.Printf("success login %s", v.Username)
+				SendRouteWSLegacy(ctx, token, Blue)
 			}()
 			time.Sleep(5 * time.Second)
 		}
 	}()
 	wg.Wait()
+
+	log.Printf("error occured: %v", errorOccur.errors)
 }

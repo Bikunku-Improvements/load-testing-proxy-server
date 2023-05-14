@@ -13,14 +13,13 @@ import (
 	"time"
 )
 
-func SendRoute(ctx context.Context, wg *sync.WaitGroup, token string, route []byte) {
-	defer wg.Done()
+func SendRoute(ctx context.Context, token string, route []byte) {
 	addr := os.Getenv("DRIVER_SERVICE_GRPC")
 
 	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	defer conn.Close()
 	if err != nil {
-		log.Printf("error connecting to grpc: %v", err)
+		errorOccur.HandleError(err)
 		return
 	}
 
@@ -32,21 +31,21 @@ func SendRoute(ctx context.Context, wg *sync.WaitGroup, token string, route []by
 	svc := pb.NewLocationClient(conn)
 	stream, err := svc.SendLocation(ctx)
 	if err != nil {
-		log.Printf("error connecting to grpc: %v", err)
+		errorOccur.HandleError(err)
 		return
 	}
 
 	var routeReq []pb.SendLocationRequest
 	err = json.Unmarshal(route, &routeReq)
 	if err != nil {
-		log.Printf("error when marhsal input data: %v", err)
+		errorOccur.HandleError(err)
 		return
 	}
 
 	for _, v := range routeReq {
 		err = stream.Send(&v)
 		if err != nil {
-			log.Printf("error sending data to grpc: %v", err)
+			errorOccur.HandleError(err)
 			return
 		}
 
@@ -60,7 +59,6 @@ func LoginDriver(ctx context.Context, username, password string) (string, error)
 	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	defer conn.Close()
 	if err != nil {
-		log.Printf("error connecting to grpc: %v", err)
 		return "", err
 	}
 
@@ -83,32 +81,40 @@ func GRPCDriverTest() {
 
 	wg.Add(1)
 	go func() {
+		wg.Add(1)
 		for _, v := range RedCredential {
 			go func() {
+				defer wg.Done()
 				token, err := LoginDriver(ctx, v.Username, v.Password)
 				if err != nil {
-					log.Printf("unable to log in: %v", err)
+					errorOccur.HandleError(err)
 					return
 				}
 
-				SendRoute(ctx, &wg, token, Red)
+				SendRoute(ctx, token, Red)
 			}()
 			time.Sleep(5 * time.Second)
 		}
+		wg.Done()
 	}()
 
 	time.Sleep(2 * time.Second)
 
 	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		for _, v := range BlueCredential {
 			go func() {
+				wg.Add(1)
+				defer wg.Done()
 				token, err := LoginDriver(ctx, v.Username, v.Password)
 				if err != nil {
-					log.Printf("unable to log in: %v", err)
+					log.Printf("failed login %s", v.Username)
+					errorOccur.HandleError(err)
 					return
 				}
-				SendRoute(ctx, &wg, token, Blue)
+				log.Printf("success login %s", v.Username)
+				SendRoute(ctx, token, Blue)
 			}()
 			time.Sleep(5 * time.Second)
 		}

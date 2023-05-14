@@ -3,7 +3,7 @@ WORKDIR /app
 
 # Download Depedency
 COPY go.* ./
-RUN go mod download
+RUN go mod tidy
 
 # Copy Source Code to Container
 COPY . ./
@@ -18,4 +18,4 @@ COPY --from=Builder /app/load-testing-proxy-server /load-testing-proxy-server
 COPY --from=Builder /app/serviceAccountKey.json /serviceAccountKey.json
 
 # Run app
-CMD ["./load-testing-proxy-server"]
+ENTRYPOINT ["./load-testing-proxy-server"]

@@ -9,10 +9,10 @@ type BusLocationWSLegacyResponse struct {
 	Status        string    `json:"status"`
 	Route         string    `json:"route"`
 	IsActive      bool      `json:"isActive"`
-	Long          int       `json:"long"`
-	Lat           int       `json:"lat"`
-	Speed         int       `json:"speed"`
-	Heading       int       `json:"heading"`
+	Long          float64   `json:"long"`
+	Lat           float64   `json:"lat"`
+	Speed         float64   `json:"speed"`
+	Heading       float64   `json:"heading"`
 	Timestamp     time.Time `json:"Timestamp"`
 	IsNewLocation bool      `json:"IsNewLocation"`
 }
