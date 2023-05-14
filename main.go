@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/joho/godotenv"
+	"load-testing-proxy-server/integration"
 	"load-testing-proxy-server/load_test"
 	"log"
 	"os"
@@ -20,10 +21,10 @@ func main() {
 		log.Println("type options are driver or client")
 		log.Println("endpoint type options are grpc, ws-legacy, firebase")
 	}
-
-	if len(args) < 4 {
-		log.Fatalf("arguments need to be '[type] [endpoint_type] [concurrent user] [receive/send message per client]'")
-	}
+	//
+	//if len(args) < 4 {
+	//	log.Fatalf("arguments need to be '[type] [endpoint_type] [concurrent user] [receive/send message per client]'")
+	//}
 
 	clientType := args[0]
 	switch clientType {
@@ -70,6 +71,13 @@ func main() {
 			load_test.WSLegacyClientTest(concurrentUser, receiveMessagePerClient)
 		default:
 			log.Fatalf("type need to be grpc, firebase, or ws-legacy")
+		}
+	case "integration":
+		switch args[1] {
+		case "grpc":
+			integration.GRPCDriverTest()
+		case "ws-legacy":
+			integration.WSLegacyDriverTest()
 		}
 	default:
 		log.Fatalf("type must be client or driver")
