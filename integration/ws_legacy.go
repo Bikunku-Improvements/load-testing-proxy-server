@@ -41,27 +41,23 @@ func SendRouteWSLegacy(ctx context.Context, token string, route []byte) {
 	dial, _, err := websocket_dialler.DefaultDialer.Dial(url, nil)
 	if err != nil {
 		errorOccur.HandleError(err)
-		return
 	}
 	defer dial.Close()
 
 	var routeReq []RouteData
 	if err := json.Unmarshal(route, &routeReq); err != nil {
 		errorOccur.HandleError(err)
-		return
 	}
 
 	for _, v := range routeReq {
 		b, err := json.Marshal(v)
 		if err != nil {
 			errorOccur.HandleError(err)
-			return
 		}
 
 		err = dial.WriteMessage(1, b)
 		if err != nil {
 			errorOccur.HandleError(err)
-			return
 		}
 
 		time.Sleep(time.Second)
@@ -115,16 +111,18 @@ func WSLegacyDriverTest() {
 				defer wg.Done()
 				token, err := LoginDriverWSLegacy(ctx, v.Username, v.Password)
 				if err != nil {
+					log.Printf("failed login %s", v.Username)
 					errorOccur.HandleError(err)
 					return
 				}
+				log.Printf("success login %s", v.Username)
 				SendRouteWSLegacy(ctx, token, Red)
 			}()
-			time.Sleep(5 * time.Second)
+			time.Sleep(1 * time.Second)
 		}
 	}()
 
-	time.Sleep(2 * time.Second)
+	time.Sleep(1 * time.Second)
 
 	wg.Add(1)
 	go func() {
@@ -143,7 +141,7 @@ func WSLegacyDriverTest() {
 				log.Printf("success login %s", v.Username)
 				SendRouteWSLegacy(ctx, token, Blue)
 			}()
-			time.Sleep(5 * time.Second)
+			time.Sleep(1 * time.Second)
 		}
 	}()
 	wg.Wait()

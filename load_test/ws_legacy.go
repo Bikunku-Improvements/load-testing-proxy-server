@@ -60,7 +60,6 @@ func WSLegacyClientTest(concurrentUser int, receiveMessagePerClient int) {
 						responseTime := time.Since(v.Timestamp)
 						avgTime.newLoc[v.Id] = v.Id
 						avgTime.times = append(avgTime.times, responseTime.Seconds())
-
 						totalRequest++
 
 						log.Printf("message received from websocket legacy with id=%d with latency: %s", v.Id, responseTime)

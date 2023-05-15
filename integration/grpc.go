@@ -87,10 +87,11 @@ func GRPCDriverTest() {
 				defer wg.Done()
 				token, err := LoginDriver(ctx, v.Username, v.Password)
 				if err != nil {
+					log.Printf("failed login %s", v.Username)
 					errorOccur.HandleError(err)
 					return
 				}
-
+				log.Printf("success login %s", v.Username)
 				SendRoute(ctx, token, Red)
 			}()
 			time.Sleep(5 * time.Second)
