@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
 	"github.com/joho/godotenv"
 	"load-testing-proxy-server/integration"
 	"load-testing-proxy-server/load_test"
 	"log"
 	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 )
 
 func main() {
@@ -25,6 +28,9 @@ func main() {
 	//if len(args) < 4 {
 	//	log.Fatalf("arguments need to be '[type] [endpoint_type] [concurrent user] [receive/send message per client]'")
 	//}
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
 	clientType := args[0]
 	switch clientType {
@@ -64,7 +70,11 @@ func main() {
 
 		switch endpointType {
 		case "grpc":
-			load_test.GRPCClientTest(concurrentUser, receiveMessagePerClient)
+			if receiveMessagePerClient == 0 {
+				load_test.GRPCClientTestWithContext(ctx, concurrentUser)
+			} else {
+				load_test.GRPCClientTest(concurrentUser, receiveMessagePerClient)
+			}
 		case "firebase":
 			load_test.FirebaseClientTest(concurrentUser, receiveMessagePerClient)
 		case "ws-legacy":

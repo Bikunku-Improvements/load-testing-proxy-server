@@ -16,6 +16,80 @@ import (
 	"unsafe"
 )
 
+func GRPCClientTestWithContext(ctx context.Context, concurrentUser int) {
+	log.Printf("starting grpc load test with %d concurrent user", concurrentUser)
+
+	avgTime := EndToEndResponseTime{
+		sync: sync.Mutex{},
+	}
+
+	errorsOccur := ErrorOccur{
+		errors: make(map[string]int),
+		sync:   sync.Mutex{},
+	}
+
+	for i := 0; i < concurrentUser; i++ {
+		go func() {
+			ctxWithTimeout, cancel := context.WithTimeout(ctx, 10*time.Minute)
+			defer cancel()
+			addr := os.Getenv("PASSENGER_SERVICE_ADDR")
+
+			conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+			defer conn.Close()
+			if err != nil {
+				errorsOccur.HandleError(err)
+				return
+			}
+
+			client := pb.NewLocationClient(conn)
+			stream, err := client.SubscribeLocation(ctxWithTimeout, &pb.SubscribeLocationRequest{})
+			if err != nil {
+				errorsOccur.HandleError(err)
+				return
+			}
+
+			// receive message
+			for {
+				location, err := stream.Recv()
+				if err == io.EOF {
+					break
+				}
+
+				if err != nil {
+					errorsOccur.HandleError(err)
+					return
+				}
+
+				b, err := json.Marshal(location)
+				if err != nil {
+					errorsOccur.HandleError(err)
+					return
+				}
+
+				var loc entity.BusLocationGRPC
+				err = json.Unmarshal(b, &loc)
+				if err != nil {
+					errorsOccur.HandleError(err)
+					return
+				}
+
+				responseTime := time.Since(loc.CreatedAt)
+				log.Printf("message received from grpc with latency: %s", responseTime)
+
+				avgTime.sync.Lock()
+				avgTime.times = append(avgTime.times, responseTime.Seconds())
+				avgTime.sync.Unlock()
+			}
+
+		}()
+	}
+
+	<-ctx.Done()
+
+	log.Printf("median response time: %v second", median(avgTime.times))
+	log.Printf("error occured: %v", errorsOccur.errors)
+}
+
 func GRPCClientTest(concurrentUser, receiveMessagePerClient int) {
 	log.Printf("starting grpc load test with %d concurrent user and %d receive message per client", concurrentUser, receiveMessagePerClient)
 	var wg sync.WaitGroup

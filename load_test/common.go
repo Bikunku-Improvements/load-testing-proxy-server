@@ -2,6 +2,7 @@ package load_test
 
 import (
 	"fmt"
+	"log"
 	"sort"
 	"sync"
 )
@@ -27,6 +28,7 @@ func (e *ErrorOccur) HandleError(err error) {
 	e.sync.Lock()
 	defer e.sync.Unlock()
 
+	log.Printf("error: %s", err.Error())
 	errType := fmt.Sprintf("%T", err)
 	if _, ok := e.errors[errType]; ok {
 		e.errors[errType] += 1

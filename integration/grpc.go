@@ -92,6 +92,8 @@ func GRPCDriverTest() {
 					return
 				}
 				log.Printf("success login %s", v.Username)
+				log.Println("red", len(Red))
+
 				SendRoute(ctx, token, Red)
 			}()
 			time.Sleep(5 * time.Second)
@@ -115,6 +117,7 @@ func GRPCDriverTest() {
 					return
 				}
 				log.Printf("success login %s", v.Username)
+				log.Println("blue", len(Blue))
 				SendRoute(ctx, token, Blue)
 			}()
 			time.Sleep(5 * time.Second)
