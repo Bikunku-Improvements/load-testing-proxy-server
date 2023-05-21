@@ -2,6 +2,7 @@ package load_test
 
 import (
 	"fmt"
+	"google.golang.org/grpc/status"
 	"log"
 	"sort"
 	"sync"
@@ -28,12 +29,20 @@ func (e *ErrorOccur) HandleError(err error) {
 	e.sync.Lock()
 	defer e.sync.Unlock()
 
-	log.Printf("error: %s", err.Error())
-	errType := fmt.Sprintf("%T", err)
-	if _, ok := e.errors[errType]; ok {
-		e.errors[errType] += 1
+	if errGRPC, ok := status.FromError(err); ok {
+		if _, ok := e.errors[errGRPC.Code().String()]; ok {
+			e.errors[errGRPC.Code().String()] += 1
+		} else {
+			e.errors[errGRPC.Code().String()] = 1
+		}
 	} else {
-		e.errors[errType] = 1
+		errType := fmt.Sprintf("%T", err)
+		log.Printf("error type %s; error detail: %s", errType, err.Error())
+		if _, ok := e.errors[errType]; ok {
+			e.errors[errType] += 1
+		} else {
+			e.errors[errType] = 1
+		}
 	}
 }
 

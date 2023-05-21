@@ -328,6 +328,13 @@ var Red = []byte(`[
   { "lat": -6.34842, "long": 106.82976 }
 ]`)
 
+var RedTest = []byte(`[
+	{ "lat": -6.34842, "long": 106.82976 },
+	{ "lat": -6.34857, "long": 106.83071 },
+	{ "lat": -6.3487, "long": 106.83136 },
+	{ "lat": -6.34873, "long": 106.83145 }
+]`)
+
 type RouteData struct {
 	Long float64 `json:"long"`
 	Lat  float64 `json:"lat"`

@@ -32,6 +32,12 @@ var (
 		errors: make(map[string]int),
 		sync:   sync.Mutex{},
 	}
+
+	throughput = Throughput{
+		sizeData:  0,
+		totalData: 0,
+		sync:      sync.Mutex{},
+	}
 )
 
 func SendRouteWSLegacy(ctx context.Context, token string, route []byte) {
@@ -53,13 +59,20 @@ func SendRouteWSLegacy(ctx context.Context, token string, route []byte) {
 		b, err := json.Marshal(v)
 		if err != nil {
 			errorOccur.HandleError(err)
+			break
 		}
 
 		err = dial.WriteMessage(1, b)
 		if err != nil {
 			errorOccur.HandleError(err)
+			break
 		}
 
+		err = throughput.AddSizeData(v)
+		if err != nil {
+			log.Printf("error when adding size data: %v", err)
+			break
+		}
 		time.Sleep(time.Second)
 	}
 }
@@ -98,6 +111,7 @@ func LoginDriverWSLegacy(ctx context.Context, username, password string) (string
 
 func WSLegacyDriverTest() {
 	ctx := context.Background()
+	now := time.Now()
 
 	var wg sync.WaitGroup
 
@@ -146,5 +160,7 @@ func WSLegacyDriverTest() {
 	}()
 	wg.Wait()
 
+	log.Printf("total size data send: %v MB/s", float64(throughput.sizeData)/time.Since(now).Seconds()/1000000)
+	log.Printf("total count data send: %v", throughput.totalData)
 	log.Printf("error occured: %v", errorOccur.errors)
 }

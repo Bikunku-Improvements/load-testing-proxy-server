@@ -49,6 +49,12 @@ func SendRoute(ctx context.Context, token string, route []byte) {
 			return
 		}
 
+		err = throughput.AddSizeData(v)
+		if err != nil {
+			log.Printf("error when adding size data: %v", err)
+			break
+		}
+
 		time.Sleep(time.Second)
 	}
 }
@@ -76,13 +82,16 @@ func LoginDriver(ctx context.Context, username, password string) (string, error)
 
 func GRPCDriverTest() {
 	ctx := context.Background()
+	now := time.Now()
 
 	var wg sync.WaitGroup
 
 	wg.Add(1)
 	go func() {
-		wg.Add(1)
+		defer wg.Done()
+
 		for _, v := range RedCredential {
+			wg.Add(1)
 			go func() {
 				defer wg.Done()
 				token, err := LoginDriver(ctx, v.Username, v.Password)
@@ -92,23 +101,22 @@ func GRPCDriverTest() {
 					return
 				}
 				log.Printf("success login %s", v.Username)
-				log.Println("red", len(Red))
 
 				SendRoute(ctx, token, Red)
 			}()
-			time.Sleep(5 * time.Second)
+			time.Sleep(1 * time.Second)
 		}
-		wg.Done()
 	}()
 
-	time.Sleep(2 * time.Second)
+	time.Sleep(1 * time.Second)
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+
 		for _, v := range BlueCredential {
+			wg.Add(1)
 			go func() {
-				wg.Add(1)
 				defer wg.Done()
 				token, err := LoginDriver(ctx, v.Username, v.Password)
 				if err != nil {
@@ -117,11 +125,14 @@ func GRPCDriverTest() {
 					return
 				}
 				log.Printf("success login %s", v.Username)
-				log.Println("blue", len(Blue))
 				SendRoute(ctx, token, Blue)
 			}()
-			time.Sleep(5 * time.Second)
+			time.Sleep(1 * time.Second)
 		}
 	}()
 	wg.Wait()
+
+	log.Printf("total size data send: %v MB/s", float64(throughput.sizeData)/time.Since(now).Seconds()/1000000)
+	log.Printf("total count data send: %v", throughput.totalData)
+	log.Printf("error occured: %v", errorOccur.errors)
 }

@@ -57,20 +57,20 @@ func GRPCClientTestWithContext(ctx context.Context, concurrentUser int) {
 
 				if err != nil {
 					errorsOccur.HandleError(err)
-					return
+					break
 				}
 
 				b, err := json.Marshal(location)
 				if err != nil {
 					errorsOccur.HandleError(err)
-					return
+					break
 				}
 
 				var loc entity.BusLocationGRPC
 				err = json.Unmarshal(b, &loc)
 				if err != nil {
 					errorsOccur.HandleError(err)
-					return
+					break
 				}
 
 				responseTime := time.Since(loc.CreatedAt)
