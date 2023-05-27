@@ -1,33 +1,47 @@
 package firebase_client
 
 import (
-	"cloud.google.com/go/firestore"
 	"context"
 	"encoding/json"
-	firebase "firebase.google.com/go"
 	"fmt"
-	"google.golang.org/api/iterator"
-	"google.golang.org/api/option"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"load-testing-proxy-server/entity"
 	"log"
 	"os"
 	"strconv"
+	"sync"
+
+	"cloud.google.com/go/firestore"
+	firebase "firebase.google.com/go"
+	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
+
+type SafeActiveBus struct {
+	V map[int]entity.Bus
+	Sync sync.Mutex
+}
 
 var (
 	LocationBroadcaster = make(chan entity.BusLocationFirebase)
-	ActiveBus           = make(map[int]entity.Bus)
+	ActiveBus						= SafeActiveBus{
+		V: make(map[int]entity.Bus),
+		Sync: sync.Mutex{},
+	}
 )
 
-func BusListener(ctx context.Context) {
+func Connection() (*firebase.App) {
+	ctx := context.Background()
 	sa := option.WithCredentialsFile(os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
 	app, err := firebase.NewApp(ctx, nil, sa)
 	if err != nil {
 		log.Printf("error: %v", err)
 	}
+	return app
+}
 
+func BusListener(ctx context.Context, app *firebase.App) {
 	client, err := app.Firestore(ctx)
 	if err != nil {
 		log.Printf("error: %v", err)
@@ -35,6 +49,7 @@ func BusListener(ctx context.Context) {
 	defer client.Close()
 
 	it := client.Collection("buses").Snapshots(ctx)
+	defer it.Stop()
 	for {
 		snap, err := it.Next()
 		// DeadlineExceeded will be returned when ctx is cancelled.
@@ -71,22 +86,20 @@ func BusListener(ctx context.Context) {
 				}
 
 				if data.IsActive {
-					ActiveBus[data.ID] = data
+					ActiveBus.Sync.Lock()
+					ActiveBus.V[data.ID] = data
+					ActiveBus.Sync.Unlock()
 				} else {
-					delete(ActiveBus, data.ID)
+					ActiveBus.Sync.Lock()
+					delete(ActiveBus.V, data.ID)
+					ActiveBus.Sync.Unlock()
 				}
 			}
 		}
 	}
 }
 
-func LocationListener(ctx context.Context) {
-	sa := option.WithCredentialsFile(os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
-	app, err := firebase.NewApp(ctx, nil, sa)
-	if err != nil {
-		log.Printf("error: %v", err)
-	}
-
+func LocationListener(ctx context.Context, app *firebase.App) {
 	client, err := app.Firestore(ctx)
 	if err != nil {
 		log.Printf("error: %v", err)
@@ -94,6 +107,7 @@ func LocationListener(ctx context.Context) {
 	defer client.Close()
 
 	it := client.Collection("bus_locations").OrderBy("timestamp", firestore.Desc).Limit(1).Snapshots(ctx)
+	defer it.Stop()
 	for {
 		snap, err := it.Next()
 		// DeadlineExceeded will be returned when ctx is cancelled.

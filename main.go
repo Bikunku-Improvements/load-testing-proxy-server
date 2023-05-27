@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"github.com/joho/godotenv"
 	"load-testing-proxy-server/integration"
 	"load-testing-proxy-server/load_test"
 	"log"
@@ -10,6 +9,8 @@ import (
 	"os/signal"
 	"strconv"
 	"syscall"
+
+	"github.com/joho/godotenv"
 )
 
 func main() {
@@ -76,7 +77,11 @@ func main() {
 				load_test.GRPCClientTest(concurrentUser, receiveMessagePerClient)
 			}
 		case "firebase":
-			load_test.FirebaseClientTest(concurrentUser, receiveMessagePerClient)
+			if receiveMessagePerClient == 0 {
+				load_test.FirebaseClientTestWithContext(ctx, concurrentUser)
+			} else {
+				load_test.FirebaseClientTest(concurrentUser, receiveMessagePerClient)
+			}
 		case "ws-legacy":
 			load_test.WSLegacyClientTest(concurrentUser, receiveMessagePerClient)
 		default:
@@ -88,6 +93,8 @@ func main() {
 			integration.GRPCDriverTest()
 		case "ws-legacy":
 			integration.WSLegacyDriverTest()
+		case "firebase":
+			integration.FirebaseDriverTest()
 		}
 	default:
 		log.Fatalf("type must be client or driver")
