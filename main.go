@@ -90,11 +90,11 @@ func main() {
 	case "integration":
 		switch args[1] {
 		case "grpc":
-			integration.GRPCDriverTest()
+			integration.GRPCDriverTest(ctx)
 		case "ws-legacy":
 			integration.WSLegacyDriverTest()
 		case "firebase":
-			integration.FirebaseDriverTest()
+			integration.FirebaseDriverTest(ctx)
 		}
 	default:
 		log.Fatalf("type must be client or driver")

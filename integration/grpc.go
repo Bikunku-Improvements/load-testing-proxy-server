@@ -80,8 +80,7 @@ func LoginDriver(ctx context.Context, username, password string) (string, error)
 	return login.Token, nil
 }
 
-func GRPCDriverTest() {
-	ctx := context.Background()
+func GRPCDriverTest(ctx context.Context) {
 	now := time.Now()
 
 	var wg sync.WaitGroup

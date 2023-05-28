@@ -74,7 +74,6 @@ func GRPCClientTestWithContext(ctx context.Context, concurrentUser int) {
 				}
 
 				responseTime := time.Since(loc.CreatedAt)
-				log.Printf("message received from grpc with latency: %s", responseTime)
 
 				avgTime.sync.Lock()
 				avgTime.times = append(avgTime.times, responseTime.Seconds())
@@ -150,7 +149,6 @@ func GRPCClientTest(concurrentUser, receiveMessagePerClient int) {
 				}
 
 				responseTime := time.Since(loc.CreatedAt)
-				log.Printf("message received from grpc with latency: %s", responseTime)
 
 				avgTime.sync.Lock()
 				avgTime.times = append(avgTime.times, responseTime.Seconds())

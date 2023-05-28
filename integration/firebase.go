@@ -83,8 +83,7 @@ func LoginDriverFirebase(ctx context.Context, username, password string) (string
 	return loginResp.Data.Token, nil
 }
 
-func FirebaseDriverTest() {
-	ctx := context.Background()
+func FirebaseDriverTest(ctx context.Context) {
 	now := time.Now()
 
 	var wg sync.WaitGroup

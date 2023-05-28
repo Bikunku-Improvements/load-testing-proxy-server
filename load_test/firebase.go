@@ -22,28 +22,28 @@ import (
 )
 
 type SafeActiveBus struct {
-	V map[int]entity.Bus
+	V    map[int]entity.Bus
 	Sync sync.Mutex
 }
 
 type SafeLocationBus struct {
-	V map[int]entity.BusLocationFirebaseResponse
+	V    map[int]entity.BusLocationFirebaseResponse
 	Sync sync.Mutex
 }
 
 var (
 	LocationBroadcaster = make(chan entity.BusLocationFirebase)
-	ActiveBus						= SafeActiveBus{
-		V: make(map[int]entity.Bus),
+	ActiveBus           = SafeActiveBus{
+		V:    make(map[int]entity.Bus),
 		Sync: sync.Mutex{},
 	}
-	StateBus						= SafeLocationBus{
-		V: make(map[int]entity.BusLocationFirebaseResponse),
+	StateBus = SafeLocationBus{
+		V:    make(map[int]entity.BusLocationFirebaseResponse),
 		Sync: sync.Mutex{},
 	}
 )
 
-func Connection() (*firebase.App) {
+func Connection() *firebase.App {
 	ctx := context.Background()
 	sa := option.WithCredentialsFile(os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
 	app, err := firebase.NewApp(ctx, nil, sa)
@@ -210,7 +210,6 @@ func FirebaseClientTestWithContext(ctx context.Context, concurrentUser int) {
 							StateBus.Sync.Unlock()
 
 							responseTime := time.Since(resp.Timestamp)
-							log.Printf("message received from firebase with latency: %s", responseTime)
 
 							avgTime.sync.Lock()
 							avgTime.times = append(avgTime.times, responseTime.Seconds())
@@ -221,7 +220,7 @@ func FirebaseClientTestWithContext(ctx context.Context, concurrentUser int) {
 			}
 		}()
 	}
-	
+
 	<-ctx.Done()
 
 	log.Printf("median response time: %v second", median(avgTime.times))
@@ -283,7 +282,7 @@ func FirebaseClientTest(concurrentUser int, receiveMessagePerClient int) {
 								errorsOccur.HandleError(err)
 								return
 							}
-							
+
 							var data entity.Bus
 							b, err := json.Marshal(doc.Data())
 							if err != nil {
@@ -370,7 +369,7 @@ func FirebaseClientTest(concurrentUser int, receiveMessagePerClient int) {
 							errorsOccur.HandleError(err)
 							return
 						}
-						
+
 						// Update StateBus based on ActiveBus availability
 						ActiveBus.Sync.Lock()
 						v, ok := ActiveBus.V[msg.BusID]
@@ -393,7 +392,6 @@ func FirebaseClientTest(concurrentUser int, receiveMessagePerClient int) {
 							StateBus.Sync.Unlock()
 
 							responseTime := time.Since(resp.Timestamp)
-							log.Printf("message received from firebase with latency: %s", responseTime)
 
 							avgTime.sync.Lock()
 							avgTime.times = append(avgTime.times, responseTime.Seconds())
