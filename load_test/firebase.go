@@ -26,10 +26,19 @@ type SafeActiveBus struct {
 	Sync sync.Mutex
 }
 
+type SafeLocationBus struct {
+	V map[int]entity.BusLocationFirebaseResponse
+	Sync sync.Mutex
+}
+
 var (
 	LocationBroadcaster = make(chan entity.BusLocationFirebase)
 	ActiveBus						= SafeActiveBus{
 		V: make(map[int]entity.Bus),
+		Sync: sync.Mutex{},
+	}
+	StateBus						= SafeLocationBus{
+		V: make(map[int]entity.BusLocationFirebaseResponse),
 		Sync: sync.Mutex{},
 	}
 )
@@ -58,28 +67,26 @@ func FirebaseClientTestWithContext(ctx context.Context, concurrentUser int) {
 
 	for i := 0; i < concurrentUser; i++ {
 		go func() {
-			ctxWithTimeout, cancel := context.WithTimeout(ctx, 1*time.Minute)
+			ctxWithTimeout, cancel := context.WithTimeout(ctx, 10*time.Minute)
 			defer cancel()
 
 			// Connect Firebase
 			app := Connection()
 
 			// go firebase_client.BusListener(ctxWithTimeout, app)
-			client, err := app.Firestore(ctxWithTimeout)
+			clientBus, err := app.Firestore(ctxWithTimeout)
 			if err != nil {
 				errorsOccur.HandleError(err)
 				return
 			}
-			defer client.Close()
+			defer clientBus.Close()
 
-			itBus := client.Collection("buses").Snapshots(ctxWithTimeout)
-			defer itBus.Stop()
+			itBus := clientBus.Collection("buses").Snapshots(ctxWithTimeout)
 			go func() {
 				for {
 					snap, err := itBus.Next()
 					// DeadlineExceeded will be returned when ctx is cancelled.
 					if status.Code(err) == codes.DeadlineExceeded {
-						log.Print("deadline")
 						errorsOccur.HandleError(err)
 						return
 					}
@@ -113,11 +120,11 @@ func FirebaseClientTestWithContext(ctx context.Context, concurrentUser int) {
 
 							data.ID, err = strconv.Atoi(doc.Ref.ID)
 							if err != nil {
-								// log.Printf("invalid parsing id: %v", err)
 								errorsOccur.HandleError(err)
 								return
 							}
 
+							// Adding/deleting to ActiveBus map
 							if data.IsActive {
 								ActiveBus.Sync.Lock()
 								ActiveBus.V[data.ID] = data
@@ -126,90 +133,90 @@ func FirebaseClientTestWithContext(ctx context.Context, concurrentUser int) {
 								ActiveBus.Sync.Lock()
 								delete(ActiveBus.V, data.ID)
 								ActiveBus.Sync.Unlock()
+								StateBus.Sync.Lock()
+								delete(StateBus.V, data.ID)
+								StateBus.Sync.Unlock()
 							}
 						}
 					}
 				}
 			}()
 
+			time.Sleep(time.Second)
+
 			// go firebase_client.LocationListener(ctxWithTimeout, app)
-			client, err = app.Firestore(ctxWithTimeout)
+			clientLoc, err := app.Firestore(ctxWithTimeout)
 			if err != nil {
 				errorsOccur.HandleError(err)
 				return
 			}
-			defer client.Close()
+			defer clientLoc.Close()
 
-			itLoc := client.Collection("bus_locations").OrderBy("timestamp", firestore.Desc).Limit(1).Snapshots(ctxWithTimeout)
-			defer itLoc.Stop()
-			go func() {
-				for {
-					snap, err := itLoc.Next()
-					// DeadlineExceeded will be returned when ctx is cancelled.
-					if status.Code(err) == codes.DeadlineExceeded {
-						errorsOccur.HandleError(err)
-						return
-					}
-					if err != nil {
-						errorsOccur.HandleError(err)
-						return
-					}
-					if snap != nil {
-						for {
-							doc, err := snap.Documents.Next()
-							if err == iterator.Done {
-								break
-							}
-							if err != nil {
-								errorsOccur.HandleError(err)
-								return
-							}
+			itLoc := clientLoc.Collection("bus_locations").OrderBy("timestamp", firestore.Desc).Limit(1).Snapshots(ctxWithTimeout)
+			for {
+				snap, err := itLoc.Next()
+				// DeadlineExceeded will be returned when ctx is cancelled.
+				if status.Code(err) == codes.DeadlineExceeded {
+					errorsOccur.HandleError(err)
+					return
+				}
+				if err != nil {
+					errorsOccur.HandleError(err)
+					return
+				}
+				if snap != nil {
+					for {
+						doc, err := snap.Documents.Next()
+						if err == iterator.Done {
+							break
+						}
+						if err != nil {
+							errorsOccur.HandleError(err)
+							return
+						}
 
-							var msg entity.BusLocationFirebase
-							b, err := json.Marshal(doc.Data())
-							if err != nil {
-								errorsOccur.HandleError(err)
-								return
-							}
+						var msg entity.BusLocationFirebase
+						b, err := json.Marshal(doc.Data())
+						if err != nil {
+							errorsOccur.HandleError(err)
+							return
+						}
 
-							err = json.Unmarshal(b, &msg)
-							if err != nil {
-								errorsOccur.HandleError(err)
-								return
+						err = json.Unmarshal(b, &msg)
+						if err != nil {
+							errorsOccur.HandleError(err)
+							return
+						}
+
+						// Update StateBus based on ActiveBus availability
+						ActiveBus.Sync.Lock()
+						v, ok := ActiveBus.V[msg.BusID]
+						ActiveBus.Sync.Unlock()
+						if ok {
+							resp := entity.BusLocationFirebaseResponse{
+								Number:    v.Number,
+								Plate:     v.Plate,
+								Status:    v.Status,
+								Route:     v.Route,
+								IsActive:  v.IsActive,
+								Heading:   msg.Heading,
+								Latitude:  msg.Latitude,
+								Longitude: msg.Longitude,
+								Speed:     msg.Speed,
+								Timestamp: msg.Timestamp,
 							}
-							
-							LocationBroadcaster <- msg
+							StateBus.Sync.Lock()
+							StateBus.V[msg.BusID] = resp
+							StateBus.Sync.Unlock()
+
+							responseTime := time.Since(resp.Timestamp)
+							log.Printf("message received from firebase with latency: %s", responseTime)
+
+							avgTime.sync.Lock()
+							avgTime.times = append(avgTime.times, responseTime.Seconds())
+							avgTime.sync.Unlock()
 						}
 					}
-				}
-			}()
-
-			for {
-				msg := <-LocationBroadcaster
-
-				ActiveBus.Sync.Lock()
-				v, ok := ActiveBus.V[msg.BusID]
-				ActiveBus.Sync.Unlock()
-				if ok {
-					resp := entity.BusLocationFirebaseResponse{
-						Number:    v.Number,
-						Plate:     v.Plate,
-						Status:    v.Status,
-						Route:     v.Route,
-						IsActive:  v.IsActive,
-						Heading:   msg.Heading,
-						Latitude:  msg.Latitude,
-						Longitude: msg.Longitude,
-						Speed:     msg.Speed,
-						Timestamp: msg.Timestamp,
-					}
-
-					responseTime := time.Since(resp.Timestamp)
-					log.Printf("message received from firebase with latency: %s", responseTime)
-
-					avgTime.sync.Lock()
-					avgTime.times = append(avgTime.times, responseTime.Seconds())
-					avgTime.sync.Unlock()
 				}
 			}
 		}()
@@ -222,7 +229,7 @@ func FirebaseClientTestWithContext(ctx context.Context, concurrentUser int) {
 }
 
 func FirebaseClientTest(concurrentUser int, receiveMessagePerClient int) {
-	log.Printf("starting firebase load test with %d concurrent user", concurrentUser)
+	log.Printf("starting firebase load test with %d concurrent user and %d receive message per client", concurrentUser, receiveMessagePerClient)
 
 	ctx := context.Background()
 
@@ -246,18 +253,17 @@ func FirebaseClientTest(concurrentUser int, receiveMessagePerClient int) {
 			app := Connection()
 
 			// go firebase_client.BusListener(ctx, app)
-			client, err := app.Firestore(ctx)
+			clientBus, err := app.Firestore(ctx)
 			if err != nil {
 				errorsOccur.HandleError(err)
 				return
 			}
-			defer client.Close()
+			defer clientBus.Close()
 
-			it := client.Collection("buses").Snapshots(ctx)
-			defer it.Stop()
+			itBus := clientBus.Collection("buses").Snapshots(ctx)
 			go func() {
 				for {
-					snap, err := it.Next()
+					snap, err := itBus.Next()
 					// DeadlineExceeded will be returned when ctx is cancelled.
 					if status.Code(err) == codes.DeadlineExceeded {
 						errorsOccur.HandleError(err)
@@ -277,7 +283,7 @@ func FirebaseClientTest(concurrentUser int, receiveMessagePerClient int) {
 								errorsOccur.HandleError(err)
 								return
 							}
-
+							
 							var data entity.Bus
 							b, err := json.Marshal(doc.Data())
 							if err != nil {
@@ -297,6 +303,7 @@ func FirebaseClientTest(concurrentUser int, receiveMessagePerClient int) {
 								return
 							}
 
+							// Adding/deleting to ActiveBus map
 							if data.IsActive {
 								ActiveBus.Sync.Lock()
 								ActiveBus.V[data.ID] = data
@@ -305,86 +312,96 @@ func FirebaseClientTest(concurrentUser int, receiveMessagePerClient int) {
 								ActiveBus.Sync.Lock()
 								delete(ActiveBus.V, data.ID)
 								ActiveBus.Sync.Unlock()
+								StateBus.Sync.Lock()
+								delete(StateBus.V, data.ID)
+								StateBus.Sync.Unlock()
 							}
 						}
 					}
 				}
 			}()
+
+			time.Sleep(time.Second)
 
 			// go firebase_client.LocationListener(ctx, app)
-			itLoc := client.Collection("bus_locations").OrderBy("timestamp", firestore.Desc).Limit(1).Snapshots(ctx)
-			defer itLoc.Stop()
-			go func() {
-				for {
-					snap, err := itLoc.Next()
-					// DeadlineExceeded will be returned when ctx is cancelled.
-					if status.Code(err) == codes.DeadlineExceeded {
-						errorsOccur.HandleError(err)
-						return
-					}
-					if err != nil {
-						errorsOccur.HandleError(err)
-						return
-					}
-					if snap != nil {
-						for {
-							doc, err := snap.Documents.Next()
-							if err == iterator.Done {
-								break
-							}
-							if err != nil {
-								errorsOccur.HandleError(err)
-								return
-							}
+			clientLoc, err := app.Firestore(ctx)
+			if err != nil {
+				errorsOccur.HandleError(err)
+				return
+			}
+			defer clientLoc.Close()
 
-							var msg entity.BusLocationFirebase
-							b, err := json.Marshal(doc.Data())
-							if err != nil {
-								errorsOccur.HandleError(err)
-								return
-							}
-
-							err = json.Unmarshal(b, &msg)
-							if err != nil {
-								errorsOccur.HandleError(err)
-								return
-							}
-							
-							LocationBroadcaster <- msg
-						}
-					}
-				}
-			}()
-
+			itLoc := clientLoc.Collection("bus_locations").OrderBy("timestamp", firestore.Desc).Limit(1).Snapshots(ctx)
 			var totalRequest int
 			for totalRequest < receiveMessagePerClient {
-				msg := <-LocationBroadcaster
+				snap, err := itLoc.Next()
+				// DeadlineExceeded will be returned when ctx is cancelled.
+				if status.Code(err) == codes.DeadlineExceeded {
+					errorsOccur.HandleError(err)
+					return
+				}
+				if err != nil {
+					errorsOccur.HandleError(err)
+					return
+				}
+				if snap != nil {
+					for {
+						doc, err := snap.Documents.Next()
 
-				ActiveBus.Sync.Lock()
-				v, ok := ActiveBus.V[msg.BusID]
-				ActiveBus.Sync.Unlock()
-				if ok {
-					resp := entity.BusLocationFirebaseResponse{
-						Number:    v.Number,
-						Plate:     v.Plate,
-						Status:    v.Status,
-						Route:     v.Route,
-						IsActive:  v.IsActive,
-						Heading:   msg.Heading,
-						Latitude:  msg.Latitude,
-						Longitude: msg.Longitude,
-						Speed:     msg.Speed,
-						Timestamp: msg.Timestamp,
+						if err == iterator.Done {
+							break
+						}
+						if err != nil {
+							errorsOccur.HandleError(err)
+							return
+						}
+
+						docData := doc.Data()
+
+						var msg entity.BusLocationFirebase
+						b, err := json.Marshal(docData)
+						if err != nil {
+							errorsOccur.HandleError(err)
+							return
+						}
+
+						err = json.Unmarshal(b, &msg)
+						if err != nil {
+							errorsOccur.HandleError(err)
+							return
+						}
+						
+						// Update StateBus based on ActiveBus availability
+						ActiveBus.Sync.Lock()
+						v, ok := ActiveBus.V[msg.BusID]
+						ActiveBus.Sync.Unlock()
+						if ok {
+							resp := entity.BusLocationFirebaseResponse{
+								Number:    v.Number,
+								Plate:     v.Plate,
+								Status:    v.Status,
+								Route:     v.Route,
+								IsActive:  v.IsActive,
+								Heading:   msg.Heading,
+								Latitude:  msg.Latitude,
+								Longitude: msg.Longitude,
+								Speed:     msg.Speed,
+								Timestamp: msg.Timestamp,
+							}
+							StateBus.Sync.Lock()
+							StateBus.V[msg.BusID] = resp
+							StateBus.Sync.Unlock()
+
+							responseTime := time.Since(resp.Timestamp)
+							log.Printf("message received from firebase with latency: %s", responseTime)
+
+							avgTime.sync.Lock()
+							avgTime.times = append(avgTime.times, responseTime.Seconds())
+							avgTime.sync.Unlock()
+
+							totalRequest++
+						}
 					}
-
-					responseTime := time.Since(resp.Timestamp)
-					log.Printf("message received from firebase with latency: %s", responseTime)
-
-					avgTime.sync.Lock()
-					avgTime.times = append(avgTime.times, responseTime.Seconds())
-					avgTime.sync.Unlock()
-
-					totalRequest++
 				}
 			}
 		}()
